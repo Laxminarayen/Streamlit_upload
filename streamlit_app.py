@@ -76,7 +76,7 @@ def upload_email_to_s3(email, bucket_name, object_name):
         st.error(f"Failed to upload email: {e}")
 
 # Streamlit UI
-st.title("YouTube Video Direct Upload to S3 with Email Tracking")
+st.title("CricCenter Youtube Upload")
 
 # Get user email
 email = st.text_input("Enter your email address")
