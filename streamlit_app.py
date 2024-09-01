@@ -3,6 +3,7 @@ import boto3
 from yt_dlp import YoutubeDL
 import random
 import string
+import os
 from io import BytesIO
 
 # Initialize S3 client
@@ -17,42 +18,41 @@ def generate_random_hash(length=10):
     return ''.join(random.choice(letters) for i in range(length))
 
 def download_and_upload_to_s3(youtube_url, bucket_name, object_name, progress_bar):
-    """Download a video from YouTube and stream it directly to S3."""
-    def upload_progress_callback(bytes_amount):
-        upload_progress_callback.seen_so_far += bytes_amount
-        progress = int(upload_progress_callback.seen_so_far / total_size * 100)
-        progress_bar.progress(progress)
-
-    upload_progress_callback.seen_so_far = 0
-
+    """Download a video from YouTube and upload it to S3, then delete the local file."""
     try:
+        # Create a temporary file path
+        temp_file_path = f"{object_name}.mp4"
+
         ydl_opts = {
             'format': 'best',
             'noplaylist': True,
+            'outtmpl': temp_file_path,  # Download the video to a temp file
             'progress_hooks': [lambda d: update_download_progress(d, progress_bar)]
         }
 
         with YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(youtube_url, download=False)
             total_size = info_dict.get('filesize') or info_dict.get('filesize_approx')
-            video_title = info_dict.get('title', None)
-
-            # Download the video data directly to a stream buffer
-            stream_buffer = BytesIO()
             ydl.download([youtube_url])
-            stream_buffer.seek(0)
 
-            # Upload directly to S3 from the stream buffer
+        # Upload the file to S3
+        with open(temp_file_path, "rb") as file_data:
             s3_client.upload_fileobj(
-                stream_buffer,
+                file_data,
                 bucket_name,
-                object_name,
-                Callback=upload_progress_callback
+                object_name
             )
             st.success(f"Uploaded successfully! Public URL: https://{bucket_name}.s3.amazonaws.com/{object_name}")
+
+        # Delete the local file after uploading
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+            st.info(f"Local file {temp_file_path} has been deleted.")
+        else:
+            st.warning(f"File {temp_file_path} does not exist.")
                 
     except Exception as e:
-        st.error(f"Failed to download and upload video: {e}")
+        st.error(f"Failed to download, upload, or delete the video: {e}")
 
 def update_download_progress(d, progress_bar):
     if d['status'] == 'downloading':
@@ -76,7 +76,7 @@ def upload_email_to_s3(email, bucket_name, object_name):
         st.error(f"Failed to upload email: {e}")
 
 # Streamlit UI
-st.title("CricCenter Highlight Generation Channel")
+st.title("YouTube Video Direct Upload to S3 with Email Tracking")
 
 # Get user email
 email = st.text_input("Enter your email address")
@@ -93,7 +93,7 @@ if youtube_url:
             video_filename = f"{base_filename}.mp4"
             email_filename = f"{base_filename}.txt"
 
-            # Download video and upload to S3
+            # Download video, upload to S3, and delete the local file
             download_and_upload_to_s3(youtube_url, BUCKET_NAME, video_filename, download_progress_bar)
 
             # Upload email to S3 with the same base filename
