@@ -10,7 +10,7 @@ from io import BytesIO
 s3_client = boto3.client('s3')
 
 # S3 bucket name (replace with your bucket name)
-BUCKET_NAME = 'highlightgenerationbucket'
+BUCKET_NAME = ''
 
 def generate_random_hash(length=10):
     """Generate a random hash for filenames."""
